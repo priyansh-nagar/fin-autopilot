@@ -1,10 +1,11 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useStore } from '../store/useStore';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { PieChart as PieChartIcon, TrendingDown, Filter } from 'lucide-react';
 
 export default function Budgets() {
-  const { budgetRows } = useStore();
+  const { parseResult } = useStore();
+  const budgetRows = parseResult?.data.budget || [];
   const [quarter, setQuarter] = useState<string>('All');
   
   if (!budgetRows || budgetRows.length === 0) {

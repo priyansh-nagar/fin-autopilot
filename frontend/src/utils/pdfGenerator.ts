@@ -4,9 +4,10 @@ import { useStore } from '../store/useStore';
 
 export const generatePDFReport = () => {
   const store = useStore.getState();
-  const { vendorRows, cloudRows, procRows, budgetRows, findings } = store;
+  const { parseResult, findings, itemsScanned } = store;
+  const budgetRows = parseResult?.data.budget || [];
 
-  const totalItems = vendorRows.length + cloudRows.length + procRows.length + budgetRows.length;
+  const totalItems = itemsScanned;
   if (totalItems === 0) {
     alert("Upload data first");
     return;
@@ -60,7 +61,7 @@ export const generatePDFReport = () => {
   // PAGE 2: Vendor Anomalies Table
   doc.addPage();
   renderHeader("Vendor Duplicate Anomalies", 2);
-  const vendorFinds = activeFindings.filter(f => f.category === 'Vendor');
+  const vendorFinds = activeFindings.filter(f => f.category === 'vendor');
   if (vendorFinds.length > 0) {
     autoTable(doc, {
       startY: 45,
@@ -76,7 +77,7 @@ export const generatePDFReport = () => {
   // PAGE 3: Cloud Spend Anomalies
   doc.addPage();
   renderHeader("Cloud Spend & Idle Resources", 3);
-  const cloudFinds = activeFindings.filter(f => f.category === 'Cloud');
+  const cloudFinds = activeFindings.filter(f => f.category === 'cloud');
   if (cloudFinds.length > 0) {
     autoTable(doc, {
       startY: 45,
@@ -92,7 +93,7 @@ export const generatePDFReport = () => {
   // PAGE 4: Procurement Overspend
   doc.addPage();
   renderHeader("Procurement Overspend (vs Benchmark)", 4);
-  const procFinds = activeFindings.filter(f => f.category === 'Procurement');
+  const procFinds = activeFindings.filter(f => f.category === 'procurement');
   if (procFinds.length > 0) {
      autoTable(doc, {
         startY: 45,
@@ -112,7 +113,7 @@ export const generatePDFReport = () => {
   if (budgetRows.length > 0) {
      // Consolidate budgets
      const chartDataMap = new Map<string, any>();
-     budgetRows.forEach(row => {
+     budgetRows.forEach((row: any) => {
        const dept = row.department || row.Department || row.dept || 'Unknown';
        const actual = parseFloat(row.actual || row.Actual || row.spend || 0);
        const budget = parseFloat(row.budget || row.Budget || 0);
