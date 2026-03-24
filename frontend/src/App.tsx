@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShieldCheck, Database, LayoutDashboard, CloudRain, ShoppingCart, TrendingDown } from 'lucide-react';
+import Papa from 'papaparse';
 
 import Sidebar from './components/Sidebar';
 import DemoLoader from './components/DemoLoader';
@@ -12,8 +13,67 @@ import Budgets from './pages/Budgets';
 
 import { useStore } from './store/useStore';
 import { uploadAndParse, runDetection } from './lib/api';
+import { runAllDetectors } from './utils/detectors';
 
 type Tab = 'overview' | 'cloud' | 'procurement' | 'budgets';
+
+const KEYWORDS = {
+  vendor: ['invoice', 'vendor', 'gstin', 'pan', 'amount', 'inv_id'],
+  cloud: ['service', 'ec2', 's3', 'rds', 'lambda', 'aws', 'gcp', 'cloud'],
+  procurement: ['po_id', 'unit_price', 'benchmark', 'item', 'purchase'],
+  budget: ['budget', 'actual', 'department', 'variance', 'cost_centre'],
+};
+
+const detectCategory = (headers: string[]) => {
+  const normalized = headers.map((h) => h.toLowerCase());
+  const scored = Object.entries(KEYWORDS).map(([category, keys]) => ({
+    category,
+    score: normalized.reduce((acc, col) => acc + (keys.some((k) => col.includes(k)) ? 1 : 0), 0),
+  }));
+  scored.sort((a, b) => b.score - a.score);
+  return scored[0].score > 0 ? scored[0].category : 'unclassified';
+};
+
+const parseCsvLocally = async (file: File) => {
+  const text = await file.text();
+  const parsed = Papa.parse<Record<string, any>>(text, { header: true, skipEmptyLines: true });
+  const rows = parsed.data || [];
+  const headers = parsed.meta.fields || [];
+  const category = detectCategory(headers);
+
+  const data = { vendor: [], cloud: [], procurement: [], budget: [], unclassified: [] } as Record<string, any[]>;
+  data[category] = rows;
+
+  return {
+    success: true,
+    fileName: file.name,
+    totalRows: rows.length,
+    rowCounts: {
+      vendor: data.vendor.length,
+      cloud: data.cloud.length,
+      procurement: data.procurement.length,
+      budget: data.budget.length,
+      unclassified: data.unclassified.length,
+    },
+    data,
+    rawText: '',
+  };
+};
+
+const normalizeLegacyFindings = (legacyFindings: any[]) =>
+  legacyFindings.map((f, index) => ({
+    id: `F${String(index + 1).padStart(3, '0')}`,
+    category: String(f.category || 'unclassified').toLowerCase(),
+    severity: String(f.severity || 'medium').toLowerCase(),
+    title: f.title || 'Detected anomaly',
+    inrImpact: Number(f.inrImpact || 0),
+    rootCause: f.rootCause || 'Heuristic detector fallback',
+    recommendation: f.recommendation || 'Review this anomaly.',
+    effort: '2-4 hours',
+    sourceRows: Array.isArray(f.sourceRows) ? f.sourceRows.map((_: any, i: number) => i) : [],
+    detectorId: 'LOCAL',
+    resolved: false,
+  }));
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('overview');
@@ -29,12 +89,30 @@ export default function App() {
 
     try {
       setLoading(true, 'Parsing your file...');
-      const parsed = await uploadAndParse(file);
+
+      let parsed: any;
+      try {
+        parsed = await uploadAndParse(file);
+      } catch (apiParseError: any) {
+        if (!file.name.toLowerCase().endsWith('.csv')) throw apiParseError;
+        parsed = await parseCsvLocally(file);
+      }
+
       setParsed(parsed);
 
       setLoading(true, 'Running anomaly detection...');
-      const detected = await runDetection(parsed.data);
-      setFindings(detected.findings || []);
+      try {
+        const detected = await runDetection(parsed.data);
+        setFindings(detected.findings || []);
+      } catch (apiDetectError) {
+        const fallback = runAllDetectors({
+          vendorRows: parsed.data.vendor || [],
+          cloudRows: parsed.data.cloud || [],
+          procRows: parsed.data.procurement || [],
+          budgetRows: parsed.data.budget || [],
+        });
+        setFindings(normalizeLegacyFindings(fallback));
+      }
 
       if (parsed.data.cloud?.length) setActiveTab('cloud');
       else if (parsed.data.procurement?.length) setActiveTab('procurement');
