@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
 import { useStore } from '../store/useStore';
 import { ShieldCheck, Truck } from 'lucide-react';
 
 export default function Procurement() {
-  const { procRows, findings } = useStore();
+  const { parseResult, findings } = useStore();
+  const procRows = parseResult?.data.procurement || [];
   
   if (!procRows || procRows.length === 0) {
     return (
@@ -34,7 +34,7 @@ export default function Procurement() {
     return acc + ((p - b) * q);
   }, 0);
 
-  const duplicateVendors = findings.filter(f => f.category === 'Vendor' && !f.resolved);
+  const duplicateVendors = findings.filter(f => f.category === 'vendor' && !f.resolved);
 
   return (
     <div className="space-y-6">

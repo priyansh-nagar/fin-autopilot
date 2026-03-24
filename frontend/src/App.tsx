@@ -1,10 +1,6 @@
-import React, { useState, useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShieldCheck, Database, LayoutDashboard, CloudRain, ShoppingCart, TrendingDown } from 'lucide-react';
-import axios from 'axios';
-import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import Papa from 'papaparse';
 
 import Sidebar from './components/Sidebar';
 import DemoLoader from './components/DemoLoader';
@@ -14,87 +10,64 @@ import CloudSpend from './pages/CloudSpend';
 import Procurement from './pages/Procurement';
 import Budgets from './pages/Budgets';
 
-import { useStore, Finding } from './store/useStore';
-import { runAllDetectors } from './utils/detectors';
+import { useStore } from './store/useStore';
+import { uploadAndParse, runDetection } from './lib/api';
 
 type Tab = 'overview' | 'cloud' | 'procurement' | 'budgets';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const [isDemoLoading, setIsDemoLoading] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { vendorRows, cloudRows, procRows, budgetRows, findings, setParsedData, setFindings } = useStore();
+  const { parseResult, findings, itemsScanned, isLoading, loadingMessage, setParsed, setFindings, setLoading, reset } = useStore();
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    
-    setIsUploading(true);
+
     try {
-      let parsed = { vendorRows: [] as any[], cloudRows: [] as any[], procRows: [] as any[], budgetRows: [] as any[], rawText: '', fileName: file.name };
-      
-      if (file.name.toLowerCase().endsWith('.csv')) {
-         const text = await file.text();
-         const result = Papa.parse(text, { header: true, skipEmptyLines: true });
-         const rows = result.data as any[];
-         const headers = result.meta.fields?.map(h => h.toLowerCase()) || [];
-         
-         if (headers.some(h => ['aws', 'service', 'resource'].includes(h))) parsed.cloudRows = rows;
-         else if (headers.some(h => ['po', 'benchmark', 'qty'].includes(h))) parsed.procRows = rows;
-         else if (headers.some(h => ['department', 'budget'].includes(h))) parsed.budgetRows = rows;
-         else parsed.vendorRows = rows;
-      } else {
-         const formData = new FormData();
-         formData.append('file', file);
-         const { data } = await axios.post('http://localhost:8000/api/parse', formData);
-         parsed = { ...parsed, ...data };
-      }
-      
-      setParsedData(parsed);
-      const generatedFindings = runAllDetectors(parsed);
-      setFindings(generatedFindings);
-      
-      if (generatedFindings.length > 0) {
-        if (parsed.cloudRows.length > 0) setActiveTab('cloud');
-        else if (parsed.procRows.length > 0) setActiveTab('procurement');
-        else if (parsed.budgetRows.length > 0) setActiveTab('budgets');
-        else setActiveTab('overview');
-      }
+      setLoading(true, 'Parsing your file...');
+      const parsed = await uploadAndParse(file);
+      setParsed(parsed);
+
+      setLoading(true, 'Running anomaly detection...');
+      const detected = await runDetection(parsed.data);
+      setFindings(detected.findings || []);
+
+      if (parsed.data.cloud?.length) setActiveTab('cloud');
+      else if (parsed.data.procurement?.length) setActiveTab('procurement');
+      else if (parsed.data.budget?.length) setActiveTab('budgets');
+      else setActiveTab('overview');
     } catch (err: any) {
       console.error(err);
-      alert("Upload failed: " + err.message);
+      alert(`Upload failed: ${err.message}`);
     } finally {
-      setIsUploading(false);
+      setLoading(false, '');
       if (e.target) e.target.value = '';
     }
   };
 
   const loadDemo = async () => {
     setIsDemoLoading(true);
-    setFindings([]);
-    setParsedData({ vendorRows: [], cloudRows: [], procRows: [], budgetRows: [], rawText: '', fileName: 'Demo Data' });
-    try {
-      const { data } = await axios.get('http://localhost:8000/api/demo');
-      setFindings(data);
-    } catch(e) {
-      console.error(e);
-    } finally {
-      setIsDemoLoading(false);
-    }
+    reset();
+    setTimeout(() => setIsDemoLoading(false), 1000);
   };
 
-  const activeFindings = findings.filter(f => !f.resolved);
-  const totalItemsScanned = vendorRows.length + cloudRows.length + procRows.length + budgetRows.length;
+  const activeFindings = findings.filter((f) => !f.resolved);
 
   return (
     <div className="min-h-screen bg-finBg text-white flex overflow-hidden">
-      <Sidebar 
-        activeTab={activeTab} setActiveTab={setActiveTab} setIsChatOpen={setIsChatOpen} 
-        loadDemo={loadDemo} isDemoLoading={isDemoLoading} isUploading={isUploading} 
-        fileInputRef={fileInputRef} handleFileUpload={handleFileUpload} 
+      <Sidebar
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        setIsChatOpen={setIsChatOpen}
+        loadDemo={loadDemo}
+        isDemoLoading={isDemoLoading}
+        isUploading={isLoading}
+        fileInputRef={fileInputRef}
+        handleFileUpload={handleFileUpload}
       />
 
       <main className="flex-1 ml-64 p-10 h-screen overflow-y-auto w-full relative">
@@ -107,7 +80,7 @@ export default function App() {
             <div className="flex space-x-6 text-sm">
               <div className="text-center px-4 border-r border-zinc-800">
                 <p className="text-zinc-500 mb-0.5">Items Scanned</p>
-                <p className="font-mono text-xl font-medium text-white">{totalItemsScanned > 0 ? totalItemsScanned.toLocaleString('en-IN') : '0'}</p>
+                <p className="font-mono text-xl font-medium text-white">{itemsScanned.toLocaleString('en-IN')}</p>
               </div>
               <div className="text-center px-4 border-r border-zinc-800">
                 <p className="text-zinc-500 mb-0.5">Active Anomalies</p>
@@ -138,16 +111,16 @@ export default function App() {
             </div>
           </header>
 
-          {isDemoLoading ? (
+          {isDemoLoading || isLoading ? (
             <DemoLoader />
-          ) : findings.length === 0 && totalItemsScanned === 0 ? (
+          ) : findings.length === 0 && itemsScanned === 0 ? (
             <div className="bg-finCard border border-zinc-800 rounded-2xl p-16 text-center shadow-xl mt-12">
               <Database className="mx-auto text-zinc-600 mb-6" size={64} />
               <h2 className="text-2xl font-bold text-white mb-3">No Target Acquired</h2>
-              <p className="text-zinc-400 max-w-md mx-auto mb-8">Deploy datasets instantly via CSV, Excel, or PDF to extract real-time financial intelligence.</p>
+              <p className="text-zinc-400 max-w-md mx-auto mb-8">Deploy datasets instantly via CSV or PDF to extract real-time financial intelligence.</p>
               <button className="bg-zinc-800 hover:bg-zinc-700 text-white font-medium px-8 py-3 rounded-xl transition-all border border-zinc-700 hover:border-violet-500/50 shadow-lg shadow-black/20"
-                onClick={() => fileInputRef.current?.click()} disabled={isUploading}>
-                {isUploading ? 'Parsing intelligence...' : 'Deploy Dataset'}
+                onClick={() => fileInputRef.current?.click()} disabled={isLoading}>
+                {isLoading ? loadingMessage || 'Processing...' : 'Deploy Dataset'}
               </button>
             </div>
           ) : (
@@ -161,7 +134,7 @@ export default function App() {
         </div>
       </main>
 
-      <AIChat isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />
+      <AIChat isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} parseResult={parseResult} />
     </div>
   );
 }
