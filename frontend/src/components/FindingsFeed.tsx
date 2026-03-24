@@ -29,8 +29,8 @@ export default function FindingsFeed({ findings, onResolve }: { findings: Findin
                  <div>
                    <div className="flex items-center space-x-3 mb-2">
                      <span className={`px-2.5 py-1 text-xs font-bold rounded-md ${
-                        finding.severity === 'Critical' ? 'bg-rose-500/20 text-rose-400' :
-                        finding.severity === 'High' ? 'bg-amber-500/20 text-amber-400' :
+                        finding.severity.toLowerCase() === 'critical' ? 'bg-rose-500/20 text-rose-400' :
+                        finding.severity.toLowerCase() === 'high' ? 'bg-amber-500/20 text-amber-400' :
                         'bg-emerald-500/20 text-emerald-400'
                      }`}>
                         {finding.severity}
