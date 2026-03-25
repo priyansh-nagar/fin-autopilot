@@ -152,6 +152,7 @@ def _base_response(file_name: str, raw_text: str = "") -> dict[str, Any]:
 
 
 @app.post("/api/parse")
+@app.post("/parse")
 async def parse_file(file: UploadFile = File(...)):
     filename = (file.filename or "").lower()
     if not filename.endswith((".csv", ".pdf")):
@@ -398,6 +399,7 @@ def budget_variance(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 @app.post("/api/detect")
+@app.post("/detect")
 def detect(req: DetectRequest):
     findings = []
     findings.extend(vendor_duplicates(req.vendor))
@@ -437,6 +439,7 @@ class ChatRequest(BaseModel):
 
 
 @app.post("/api/chat")
+@app.post("/chat")
 def chat(req: ChatRequest):
     if not req.messages:
         raise HTTPException(status_code=400, detail="messages array is required")

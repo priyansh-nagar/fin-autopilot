@@ -3,9 +3,8 @@ const ENV_BASE = import.meta.env.VITE_API_URL?.trim();
 function getBaseUrl() {
   if (ENV_BASE) return ENV_BASE.replace(/\/$/, '');
   if (import.meta.env.DEV) return 'http://localhost:8000';
-  throw new Error(
-    'VITE_API_URL is not configured for production. Set it to your backend URL (e.g. https://your-backend-domain).'
-  );
+  // Production fallback: use same-domain Vercel Python function at /api
+  return '/api';
 }
 
 function apiUrl(path: string) {
@@ -24,7 +23,7 @@ async function fetchJson(url: string, options: RequestInit) {
   } catch (error: any) {
     if (error instanceof TypeError) {
       throw new Error(
-        `Network error while reaching ${url}. Verify VITE_API_URL points to a live HTTPS backend and CORS allows your frontend domain.`
+        `Network error while reaching ${url}. Verify backend is deployed and CORS allows your frontend domain.`
       );
     }
     if (!error?.message) {
@@ -37,11 +36,11 @@ async function fetchJson(url: string, options: RequestInit) {
 export async function uploadAndParse(file: File) {
   const form = new FormData();
   form.append('file', file);
-  return fetchJson(apiUrl('/api/parse'), { method: 'POST', body: form });
+  return fetchJson(apiUrl('/parse'), { method: 'POST', body: form });
 }
 
 export async function runDetection(data: object) {
-  return fetchJson(apiUrl('/api/detect'), {
+  return fetchJson(apiUrl('/detect'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
@@ -49,7 +48,7 @@ export async function runDetection(data: object) {
 }
 
 export async function askFinBot(messages: object[], context: object) {
-  return fetchJson(apiUrl('/api/chat'), {
+  return fetchJson(apiUrl('/chat'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ messages, context }),

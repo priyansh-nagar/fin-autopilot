@@ -4,12 +4,8 @@
   "buildCommand": "cd frontend && npm install --include=dev && npm install --no-save @rollup/rollup-linux-x64-gnu @esbuild/linux-x64 && npm run build",
   "outputDirectory": "frontend/dist",
   "routes": [
-    {
-      "handle": "filesystem"
-    },
-    {
-      "src": "/.*",
-      "dest": "/index.html"
-    }
+    { "src": "/api/(.*)", "dest": "/api/index.py" },
+    { "handle": "filesystem" },
+    { "src": "/.*", "dest": "/index.html" }
   ]
 }
