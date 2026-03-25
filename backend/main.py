@@ -151,6 +151,36 @@ def _base_response(file_name: str, raw_text: str = "") -> dict[str, Any]:
     }
 
 
+def _normalize_header_cell(value: Any, index: int) -> str:
+    text = str(value).replace("\n", " ").strip() if value is not None else ""
+    return text if text else f"col_{index}"
+
+
+def _rows_from_delimited_text(raw_text: str) -> list[dict[str, Any]]:
+    lines = [line.strip() for line in raw_text.splitlines() if line.strip()]
+    if len(lines) < 2:
+        return []
+
+    delimiter = None
+    for candidate in ["|", ",", "\t"]:
+        if sum(1 for line in lines[:10] if candidate in line) >= 2:
+            delimiter = candidate
+            break
+    if delimiter is None:
+        return []
+
+    header_parts = [h.strip() for h in lines[0].split(delimiter)]
+    headers = [_normalize_header_cell(h, i) for i, h in enumerate(header_parts)]
+    rows: list[dict[str, Any]] = []
+    for line in lines[1:]:
+        parts = [p.strip() for p in line.split(delimiter)]
+        if len(parts) < 2:
+            continue
+        row = {headers[i]: (parts[i] if i < len(parts) else "") for i in range(len(headers))}
+        rows.append(row)
+    return rows
+
+
 @app.post("/api/parse")
 @app.post("/parse")
 async def parse_file(file: UploadFile = File(...)):
@@ -187,17 +217,25 @@ async def parse_file(file: UploadFile = File(...)):
                     for table in tables:
                         if not table or len(table) < 2:
                             continue
-                        headers = [str(h).strip() if h is not None else f"col_{i}" for i, h in enumerate(table[0])]
+                        headers = [_normalize_header_cell(h, i) for i, h in enumerate(table[0])]
                         rows: list[dict[str, Any]] = []
                         for row in table[1:]:
                             if not row or not any(cell for cell in row):
                                 continue
-                            row_dict = {headers[i]: (row[i] if i < len(row) else "") for i in range(len(headers))}
+                            row_dict = {
+                                headers[i]: (str(row[i]).replace("\n", " ").strip() if i < len(row) and row[i] is not None else "")
+                                for i in range(len(headers))
+                            }
                             rows.append(row_dict)
                         category = detect_category(headers)
                         response["data"][category].extend(rows)
 
         response["rawText"] = "\n".join(raw_text_parts)
+        if sum(len(v) for v in response["data"].values()) == 0 and response["rawText"].strip():
+            heuristic_rows = _rows_from_delimited_text(response["rawText"])
+            if heuristic_rows:
+                category = detect_category(list(heuristic_rows[0].keys()))
+                response["data"][category].extend(heuristic_rows)
         response["rowCounts"] = {k: len(v) for k, v in response["data"].items()}
         response["totalRows"] = sum(response["rowCounts"].values())
         return response
