@@ -12,6 +12,7 @@ import Procurement from './pages/Procurement';
 import Budgets from './pages/Budgets';
 
 import { useStore } from './store/useStore';
+import { uploadAndParse, runDetection } from './lib/api';
 import { runAllDetectors } from './utils/detectors';
 
 type Tab = 'overview' | 'cloud' | 'procurement' | 'budgets';
@@ -87,22 +88,37 @@ export default function App() {
     if (!file) return;
 
     try {
-      if (!file.name.toLowerCase().endsWith('.csv')) {
-        throw new Error('Only CSV is supported in local mode. Use chat API only for AI queries.');
+      setLoading(true, 'Parsing your file...');
+
+      let parsed: any;
+      try {
+        // Primary path: backend parse supports both CSV and PDF.
+        parsed = await uploadAndParse(file);
+      } catch (parseError: any) {
+        // Fallback path: local CSV-only parse if backend is unreachable.
+        if (file.name.toLowerCase().endsWith('.csv')) {
+          parsed = await parseCsvLocally(file);
+        } else {
+          throw parseError;
+        }
       }
 
-      setLoading(true, 'Parsing CSV locally...');
-      const parsed: any = await parseCsvLocally(file);
       setParsed(parsed);
 
-      setLoading(true, 'Running local anomaly detection...');
-      const fallback = runAllDetectors({
-        vendorRows: parsed.data.vendor || [],
-        cloudRows: parsed.data.cloud || [],
-        procRows: parsed.data.procurement || [],
-        budgetRows: parsed.data.budget || [],
-      });
-      setFindings(normalizeLegacyFindings(fallback));
+      setLoading(true, 'Running anomaly detection...');
+      try {
+        const detected = await runDetection(parsed.data);
+        setFindings(detected.findings || []);
+      } catch {
+        // If backend detection fails, still provide local detector fallback.
+        const fallback = runAllDetectors({
+          vendorRows: parsed.data.vendor || [],
+          cloudRows: parsed.data.cloud || [],
+          procRows: parsed.data.procurement || [],
+          budgetRows: parsed.data.budget || [],
+        });
+        setFindings(normalizeLegacyFindings(fallback));
+      }
 
       if (parsed.data.cloud?.length) setActiveTab('cloud');
       else if (parsed.data.procurement?.length) setActiveTab('procurement');
@@ -110,7 +126,7 @@ export default function App() {
       else setActiveTab('overview');
     } catch (err: any) {
       console.error(err);
-      const message = err?.message?.trim() || 'Unable to upload. Use CSV for local analysis.';
+      const message = err?.message?.trim() || 'Unable to upload. Check backend parse service for PDF analysis.';
       alert(`Upload failed: ${message}`);
     } finally {
       setLoading(false, '');
