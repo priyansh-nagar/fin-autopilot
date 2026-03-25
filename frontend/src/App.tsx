@@ -120,7 +120,8 @@ export default function App() {
       else setActiveTab('overview');
     } catch (err: any) {
       console.error(err);
-      alert(`Upload failed: ${err.message}`);
+      const message = err?.message?.trim() || 'Unable to upload. Check VITE_API_URL, backend health, and CORS settings.';
+      alert(`Upload failed: ${message}`);
     } finally {
       setLoading(false, '');
       if (e.target) e.target.value = '';

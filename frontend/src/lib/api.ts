@@ -8,13 +8,20 @@ function apiUrl(path: string) {
 async function fetchJson(url: string, options: RequestInit) {
   try {
     const res = await fetch(url, options);
-    if (!res.ok) throw new Error(await res.text());
+    if (!res.ok) {
+      const text = (await res.text()).trim();
+      const detail = text || `${res.status} ${res.statusText}`.trim();
+      throw new Error(`API ${res.status}: ${detail}`);
+    }
     return res.json();
   } catch (error: any) {
     if (error instanceof TypeError) {
       throw new Error(
         `Network error while reaching ${url}. Verify VITE_API_URL points to a live HTTPS backend and CORS allows your frontend domain.`
       );
+    }
+    if (!error?.message) {
+      throw new Error(`Unknown upload error while calling ${url}. Check backend logs and CORS settings.`);
     }
     throw error;
   }
