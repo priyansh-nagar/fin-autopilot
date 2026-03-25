@@ -15,11 +15,8 @@ function apiUrl(path: string) {
 }
 
 async function fetchJson(url: string, options: RequestInit) {
-  const timeoutMs = (options as any).timeoutMs ?? 45000;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await fetch(url, { ...options, signal: controller.signal });
+    const res = await fetch(url, options);
     if (!res.ok) {
       const text = (await res.text()).trim();
       const detail = text || `${res.status} ${res.statusText}`.trim();
@@ -27,9 +24,6 @@ async function fetchJson(url: string, options: RequestInit) {
     }
     return res.json();
   } catch (error: any) {
-    if (error?.name === 'AbortError') {
-      throw new Error(`Request timed out after ${Math.round(timeoutMs / 1000)}s for ${url}.`);
-    }
     if (error instanceof TypeError) {
       throw new Error(
         `Network error while reaching ${url}. Verify backend is deployed and CORS allows your frontend domain.`
@@ -39,15 +33,13 @@ async function fetchJson(url: string, options: RequestInit) {
       throw new Error(`Unknown upload error while calling ${url}. Check backend logs and CORS settings.`);
     }
     throw error;
-  } finally {
-    clearTimeout(timer);
   }
 }
 
 export async function uploadAndParse(file: File) {
   const form = new FormData();
   form.append('file', file);
-  return fetchJson(apiUrl('/parse'), { method: 'POST', body: form, timeoutMs: 90000 } as RequestInit);
+  return fetchJson(apiUrl('/parse'), { method: 'POST', body: form });
 }
 
 export async function runDetection(data: object) {
