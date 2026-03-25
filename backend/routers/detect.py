@@ -4,7 +4,7 @@ from fastapi import APIRouter
 
 from backend.detectors import budget_detector, cloud_detector, interco_detector, payroll_detector, procurement_detector, vendor_detector
 from backend.models import DetectResponse, Finding
-from backend.parsers.pdf_parser import classify_headers
+from backend.parsers.pdf_parser import classify_headers, clean_header
 
 router = APIRouter(prefix="/api", tags=["detect"])
 
@@ -20,6 +20,21 @@ def _normalize_input(payload: dict) -> dict:
     parsed = payload.get("data") if isinstance(payload.get("data"), dict) else payload
     categories = ["vendor", "cloud", "idle", "procurement", "payroll", "budget", "interco", "unclassified"]
     data = {k: list(parsed.get(k, [])) for k in categories}
+
+    unclassified_rows = data.get("unclassified", [])
+    if unclassified_rows and all(isinstance(r, dict) for r in unclassified_rows):
+        keys = [str(k) for k in unclassified_rows[0].keys()]
+        if keys and all(k.startswith("col_") for k in keys):
+            first = unclassified_rows[0]
+            header_values = [str(v).strip() for v in first.values()]
+            if any(header_values):
+                headers = [clean_header(v, i) for i, v in enumerate(header_values)]
+                remapped: list[dict] = []
+                for row in unclassified_rows[1:]:
+                    vals = list(row.values())
+                    remapped.append({headers[i]: vals[i] if i < len(vals) else "" for i in range(len(headers))})
+                if remapped:
+                    data["unclassified"] = remapped
 
     migrated: list[dict] = []
     for row in data.get("unclassified", []):

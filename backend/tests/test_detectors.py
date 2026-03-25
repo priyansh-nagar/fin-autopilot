@@ -157,3 +157,17 @@ def test_detect_normalizes_unclassified_rows():
     findings = vendor_detector.run(normalized)
     assert len(normalized["vendor"]) == 2
     assert findings and findings[0].inrImpact == 560000
+
+
+def test_detect_recovers_when_header_row_is_in_data():
+    payload = {
+        "unclassified": [
+            {"col_0": "Vendor Name", "col_1": "PAN", "col_2": "Amount (INR)"},
+            {"col_0": "Wipro Ltd", "col_1": "ABCDE1234F", "col_2": "2,80,000"},
+            {"col_0": "WIPRO TECH LTD", "col_1": "ABCDE1234F", "col_2": "2,80,000"},
+        ]
+    }
+    normalized = _normalize_input(payload)
+    findings = vendor_detector.run(normalized)
+    assert len(normalized["vendor"]) == 2
+    assert findings and findings[0].inrImpact == 560000

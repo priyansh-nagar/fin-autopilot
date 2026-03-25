@@ -12,7 +12,10 @@ from backend.models import Finding
 def _amount(row: dict) -> float:
     for k in ["amount (inr)", "amount", "total (inr)"]:
         if k in row and row[k] not in ("", None):
-            return float(row[k])
+            try:
+                return float(str(row[k]).replace("₹", "").replace(",", "").strip())
+            except ValueError:
+                return 0.0
     return 0.0
 
 
