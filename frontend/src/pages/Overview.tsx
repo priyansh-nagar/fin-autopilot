@@ -1,37 +1,25 @@
-import React from 'react';
 import SavingsCard from '../components/SavingsCard';
 import FindingsFeed from '../components/FindingsFeed';
 import { useStore } from '../store/useStore';
 import { generatePDFReport } from '../utils/pdfGenerator';
 
 export default function Overview() {
-  const { findings } = useStore();
-  const activeFindings = findings.filter(f => !f.resolved);
-  const resolvedFindings = findings.filter(f => f.resolved);
-  
-  const totalWaste = activeFindings.reduce((acc, f) => acc + f.inrImpact, 0);
-  const savingsRecovered = resolvedFindings.reduce((acc, f) => acc + f.inrImpact, 0);
+  const { findings, totalWaste, itemsScanned } = useStore();
 
-  const categoryBreakdown = activeFindings.reduce((acc: any, f) => {
+  const categoryBreakdown = findings.reduce((acc: any, f) => {
     acc[f.category] = (acc[f.category] || 0) + f.inrImpact;
     return acc;
   }, {});
 
-  const handleExportPDF = () => {
-    generatePDFReport();
-  };
-
   return (
     <div className="space-y-8">
-      <SavingsCard 
-        totalRecovered={savingsRecovered} 
-        categoryBreakdown={categoryBreakdown}
-        onExportPDF={handleExportPDF}
-      />
-      <FindingsFeed 
-        findings={findings} 
-        onResolve={(id) => useStore.getState().resolveFinding(id)} 
-      />
+      <SavingsCard totalRecovered={0} categoryBreakdown={categoryBreakdown} onExportPDF={generatePDFReport} />
+      <div className="grid grid-cols-3 gap-4">
+        <div className="bg-finCard border border-zinc-800 p-4 rounded-xl">ITEMS SCANNED: <b>{itemsScanned.toLocaleString('en-IN')}</b></div>
+        <div className="bg-finCard border border-zinc-800 p-4 rounded-xl">TOTAL WASTE: <b>{new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(totalWaste)}</b></div>
+        <div className="bg-finCard border border-zinc-800 p-4 rounded-xl">ACTIVE ANOMALIES: <b>{findings.length}</b></div>
+      </div>
+      <FindingsFeed findings={findings} onResolve={() => {}} />
     </div>
   );
 }

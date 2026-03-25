@@ -1,10 +1,10 @@
-import React from 'react';
 import { useStore } from '../store/useStore';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import { AlertTriangle, Cpu, Database } from 'lucide-react';
+import { AlertTriangle, Cpu } from 'lucide-react';
 
 export default function CloudSpend() {
-  const { cloudRows, findings } = useStore();
+  const { parseResult, findings } = useStore();
+  const cloudRows = parseResult?.data.cloud || [];
   
   if (!cloudRows || cloudRows.length === 0) {
     return (
@@ -15,7 +15,7 @@ export default function CloudSpend() {
     );
   }
 
-  const cloudFindings = findings.filter(f => f.category === 'Cloud' && !f.resolved);
+  const cloudFindings = findings.filter(f => f.category === 'cloud' && !f.resolved);
 
   // Parse chart data
   // Assuming columns: date/month, service, cost

@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "installCommand": "npm install --include=dev",
+  "buildCommand": "npm install --include=dev && npm install --no-save @rollup/rollup-linux-x64-gnu @esbuild/linux-x64 && npm run build",
+  "outputDirectory": "dist",
+  "routes": [
+    { "handle": "filesystem" },
+    { "src": "/.*", "dest": "/index.html" }
+  ]
+}
