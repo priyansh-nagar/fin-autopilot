@@ -33,7 +33,7 @@ except ImportError:
     genai = None
 
 from parser import parse_file
-from cleaner import classify_and_clean
+from cleaner import classify_and_clean, clean_dataframe, normalize_records_for_frontend
 from analyzer import run_analysis
 
 logging.basicConfig(level=logging.INFO)
@@ -59,17 +59,23 @@ app.add_middleware(
 # ---------------------------------------------------------------------------
 
 CATEGORY_KEYWORDS = {
-    "vendor":      ["invoice", "vendor", "gstin", "pan", "amount", "inv_id", "supplier"],
-    "cloud":       ["service", "ec2", "s3", "rds", "lambda", "aws", "gcp", "cloud"],
-    "procurement": ["po_id", "unit_price", "benchmark", "item", "purchase", "description"],
-    "budget":      ["budget", "actual", "department", "variance", "cost_centre"],
+    "vendor":      ["invoice", "vendor", "gstin", "pan", "supplier", "inv_id", "bill"],
+    "cloud":       ["ec2", "s3", "rds", "lambda", "aws", "gcp", "cloud", "cloudfront", "azure"],
+    "procurement": ["po_id", "unit_price", "benchmark", "item description", "purchase order", "unit price"],
+    "budget":      ["budget", "actual", "variance", "department", "cost_centre", "bgt", "q1 budget", "q2 budget"],
+    "transaction": ["debit party", "credit party", "debit", "credit", "txn id", "narration", "balance"],
 }
 
 
 def _detect_category(columns: list[str]) -> str:
-    norm = [str(c).strip().lower().replace(" ", "_") for c in columns]
-    col_text = " ".join(norm)
-    scores = {cat: sum(1 for kw in kws if kw in col_text) for cat, kws in CATEGORY_KEYWORDS.items()}
+    # Build two representations of columns: with spaces (original lower) and with underscores
+    col_text_space = " ".join(str(c).strip().lower() for c in columns)
+    col_text_under = " ".join(str(c).strip().lower().replace(" ", "_") for c in columns)
+
+    def score(kws: list[str]) -> int:
+        return sum(1 for kw in kws if kw in col_text_space or kw.replace(" ", "_") in col_text_under)
+
+    scores = {cat: score(kws) for cat, kws in CATEGORY_KEYWORDS.items()}
     best = max(scores, key=scores.get)
     return best if scores[best] > 0 else "unclassified"
 
@@ -99,7 +105,10 @@ def _safe_text(row: dict, candidates: list[str], default: str = "") -> str:
 # POST /api/parse  – legacy-compatible file upload
 # ---------------------------------------------------------------------------
 
-DATA_TEMPLATE = {"vendor": [], "cloud": [], "procurement": [], "budget": [], "unclassified": []}
+DATA_TEMPLATE = {
+    "vendor": [], "cloud": [], "procurement": [],
+    "budget": [], "transaction": [], "unclassified": []
+}
 
 
 @app.post("/api/parse")
@@ -140,11 +149,30 @@ async def parse_endpoint(file: UploadFile = File(...)):
     for df in dfs:
         if df is None or df.empty:
             continue
+        # Detect category from ORIGINAL column names (before normalization)
         category = _detect_category(df.columns.tolist())
-        records = df.fillna("").to_dict(orient="records")
-        response["data"][category].extend(records)
-        response["rowCounts"][category] += len(records)
+        if category not in response["data"]:
+            category = "unclassified"
+
+        # Normalize + reshape records so the frontend can read standard field names
+        try:
+            records = normalize_records_for_frontend(
+                df.fillna("").to_dict(orient="records"), category
+            )
+        except Exception as norm_err:
+            logger.warning("normalize_records_for_frontend failed (%s), using raw", norm_err)
+            records = df.fillna("").to_dict(orient="records")
+
+        # Transaction data also participates in vendor/duplicate analysis
+        # Map "transaction" to "vendor" in the response so frontend shows it
+        # but keep raw records for the detect endpoint
+        frontend_cat = "vendor" if category == "transaction" else category
+
+        response["data"][frontend_cat].extend(records)
+        response["rowCounts"][frontend_cat] = response["rowCounts"].get(frontend_cat, 0) + len(records)
         response["totalRows"] += len(records)
+
+        logger.info("Parsed %d rows → category=%s → frontend_cat=%s", len(records), category, frontend_cat)
 
     return response
 
@@ -160,13 +188,24 @@ class DetectRequest(BaseModel):
     budget:      list[dict[str, Any]] = Field(default_factory=list)
 
 
+def _build_clean_df(records: list[dict]) -> list[pd.DataFrame]:
+    if not records:
+        return []
+    try:
+        df = clean_dataframe(pd.DataFrame(records))
+        return [df] if not df.empty else []
+    except Exception as err:
+        logger.warning("_build_clean_df failed: %s", err)
+        return [pd.DataFrame(records)] if records else []
+
+
 @app.post("/api/detect")
 def detect_endpoint(req: DetectRequest):
     grouped_dfs: dict[str, list[pd.DataFrame]] = {
-        "vendor":      [pd.DataFrame(req.vendor)]      if req.vendor      else [],
-        "cloud":       [pd.DataFrame(req.cloud)]       if req.cloud       else [],
-        "procurement": [pd.DataFrame(req.procurement)] if req.procurement else [],
-        "budget":      [pd.DataFrame(req.budget)]      if req.budget      else [],
+        "vendor":      _build_clean_df(req.vendor),
+        "cloud":       _build_clean_df(req.cloud),
+        "procurement": _build_clean_df(req.procurement),
+        "budget":      _build_clean_df(req.budget),
         "transaction": [],
         "unclassified": [],
     }
