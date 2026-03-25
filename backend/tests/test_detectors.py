@@ -1,4 +1,5 @@
 from backend.detectors import budget_detector, cloud_detector, interco_detector, payroll_detector, procurement_detector, vendor_detector
+from backend.parsers.csv_parser import parse_csv
 
 
 def test_vendor_finds_wipro_duplicates():
@@ -37,6 +38,16 @@ def test_cloud_ignores_december_lambda():
     assert cloud_detector.run({"cloud": rows, "idle": []}) == []
 
 
+def test_cloud_detects_spike_without_account_column():
+    rows = [
+        {"month": "2024-08-01", "ec2 (inr)": 183900},
+        {"month": "2024-09-01", "ec2 (inr)": 185200},
+        {"month": "2024-10-01", "ec2 (inr)": 894600},
+    ]
+    findings = cloud_detector.run({"cloud": rows, "idle": []})
+    assert any(f.detectorId == "F_C1" for f in findings)
+
+
 def test_procurement_finds_laptop_overprice():
     rows = [{"item description": "Lenovo ThinkPad", "unit price": 94000, "qty": 8}]
     f = procurement_detector.run({"procurement": rows})
@@ -62,6 +73,20 @@ def test_budget_finds_marketing_overspend():
 def test_budget_ignores_it_underspend():
     rows = [{"department": "IT", "budget": 3600000, "actual": 3340000}]
     assert budget_detector.run({"budget": rows}) == []
+
+
+def test_budget_detects_from_quarter_columns():
+    rows = [{
+        "department": "Marketing",
+        "q1 budget": 1800000,
+        "q1 actual": 1940000,
+        "q2 budget": 2000000,
+        "q2 actual": 2180000,
+        "q3 budget": 2460000,
+        "q3 actual": 3620000,
+    }]
+    findings = budget_detector.run({"budget": rows})
+    assert findings and findings[0].inrImpact == 1480000
 
 
 def test_payroll_finds_ghost_employee():
@@ -94,3 +119,14 @@ def test_interco_ignores_gst_reverse_charge():
         {"from entity": "B", "to entity": "A", "amount": 100000, "date": "2024-04-20", "purpose": "gst reverse charge"},
     ]
     assert interco_detector.run({"interco": rows}) == []
+
+
+def test_csv_parser_normalizes_header_case_for_detectors():
+    csv_bytes = (
+        "Vendor Name,PAN,Amount (INR)\n"
+        "Wipro Technologies Pvt Ltd,AAACW0603R,\"2,80,000\"\n"
+        "WIPRO TECH LTD,AAACW0603R,\"2,80,000\"\n"
+    ).encode()
+    parsed = parse_csv(csv_bytes, "vendors.csv")
+    findings = vendor_detector.run(parsed["data"])
+    assert findings and findings[0].inrImpact == 560000

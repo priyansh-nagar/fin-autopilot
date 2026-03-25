@@ -5,13 +5,15 @@ from typing import Any
 
 import pandas as pd
 
-from .pdf_parser import classify_headers, coerce_cell
+from .pdf_parser import classify_headers, clean_header, coerce_cell
 
 CATEGORIES = ["vendor", "cloud", "idle", "procurement", "payroll", "budget", "interco", "unclassified"]
 
 
 def parse_csv(content: bytes, file_name: str) -> dict[str, Any]:
     df = pd.read_csv(io.BytesIO(content))
+    normalized_headers = [clean_header(c, i) for i, c in enumerate(df.columns)]
+    df.columns = normalized_headers
     headers = [str(c) for c in df.columns]
     category = classify_headers(headers)
     rows = [

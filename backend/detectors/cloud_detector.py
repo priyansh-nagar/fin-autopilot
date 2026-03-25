@@ -15,16 +15,20 @@ def run(data: dict) -> list[Finding]:
         month_col = next((c for c in df.columns if "month" in c.lower() or "date" in c.lower()), None)
         account_col = next((c for c in df.columns if "account" in c.lower()), None)
         service_col = next((c for c in df.columns if "service" in c.lower()), None)
-        amount_cols = [c for c in df.columns if any(k in c.lower() for k in ["ec2", "s3", "rds", "lambda", "cloudfront", "cost", "amount"])]
+        amount_cols = [
+            c for c in df.columns
+            if any(k in c.lower() for k in ["ec2", "s3", "rds", "lambda", "cloudfront", "cost", "amount", "total"])
+            and "change" not in c.lower()
+        ]
 
-        if month_col and account_col and amount_cols:
+        if month_col and amount_cols:
             df["_month"] = pd.to_datetime(df[month_col], errors="coerce")
             df = df.dropna(subset=["_month"]).sort_values("_month")
-            for acc, g1 in df.groupby(account_col):
+            grouped = df.groupby(account_col) if account_col else [("all_accounts", df)]
+            for acc, g1 in grouped:
                 for col in amount_cols:
-                    if g1[col].dtype == object:
-                        g1[col] = pd.to_numeric(g1[col], errors="coerce").fillna(0)
                     s = g1[["_month", col]].copy()
+                    s[col] = pd.to_numeric(s[col], errors="coerce").fillna(0)
                     roll = s.set_index("_month")[col].rolling("90D", min_periods=2).mean().shift(1)
                     s["roll"] = roll.values
                     for idx, row in s.iterrows():
