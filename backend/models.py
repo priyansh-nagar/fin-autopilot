@@ -1,27 +1,26 @@
-from pydantic import BaseModel
-from typing import List, Optional
+from typing import Any
+
+from pydantic import BaseModel, Field
+
 
 class Finding(BaseModel):
-    id: str
-    category: str  # Vendor, Cloud, Procurement, Budget
-    severity: str  # Critical, High, Medium
+    id: str = ""
+    category: str
+    severity: str
     title: str
-    impact_inr: float
-    root_cause: str
-    recommended_action: str
-    remediation_hours: float
-    owner: str
-    resolved: bool = False
+    inrImpact: int
+    rootCause: str
+    recommendation: str
+    effort: str
+    sourceRows: list[int] = Field(default_factory=list)
+    detectorId: str
+    isTrap: bool = False
 
-class DashboardSummary(BaseModel):
-    total_waste: float
-    findings_count: int
-    savings_recoverable: float
-    data_quality_score: int
 
-class ChatRequest(BaseModel):
-    message: str
-    findings_context: Optional[List[Finding]] = None
-
-class ChatResponse(BaseModel):
-    response: str
+class DetectResponse(BaseModel):
+    success: bool
+    totalWasteINR: int
+    findingCount: int
+    findings: list[Finding]
+    summary: dict[str, dict[str, int]]
+    scorecard: dict[str, Any]

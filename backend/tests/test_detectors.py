@@ -1,0 +1,96 @@
+from backend.detectors import budget_detector, cloud_detector, interco_detector, payroll_detector, procurement_detector, vendor_detector
+
+
+def test_vendor_finds_wipro_duplicates():
+    rows = [
+        {"vendor name": "Wipro Ltd", "pan": "ABCDE1234F", "amount": 100000},
+        {"vendor name": "Wipro Limited", "pan": "ABCDE1234F", "amount": 200000},
+        {"vendor name": "Wipro Infotech", "pan": "ABCDE1234F", "amount": 300000},
+        {"vendor name": "Wipro Technologies", "pan": "ABCDE1234F", "amount": 120000},
+        {"vendor name": "WIPRO", "pan": "ABCDE1234F", "amount": 120000},
+    ]
+    f = vendor_detector.run({"vendor": rows})
+    assert f and f[0].inrImpact == 840000
+
+
+def test_vendor_ignores_jio_subscription():
+    rows = [{"vendor name": "Jio Internet", "amount": 42000} for _ in range(12)]
+    assert vendor_detector.run({"vendor": rows}) == []
+
+
+def test_vendor_ignores_internal_recharges():
+    rows = [{"vendor name": "South Zone Recharge", "amount": 100000}, {"vendor name": "North Zone Recharge", "amount": 99000}]
+    assert vendor_detector.run({"vendor": rows}) == []
+
+
+def test_cloud_finds_ec2_spike():
+    rows = [{"month": f"2024-{m:02d}-01", "account": "Prod", "ec2": 100000} for m in range(1, 7)]
+    rows.append({"month": "2024-07-01", "account": "Prod", "ec2": 600000})
+    f = cloud_detector.run({"cloud": rows, "idle": []})
+    assert any(x.severity == "critical" for x in f)
+
+
+def test_cloud_ignores_december_lambda():
+    rows = [{"month": "2024-10-01", "account": "Prod", "service": "Lambda", "lambda": 60000},
+            {"month": "2024-11-01", "account": "Prod", "service": "Lambda", "lambda": 65000},
+            {"month": "2024-12-01", "account": "Prod", "service": "Lambda", "lambda": 250000}]
+    assert cloud_detector.run({"cloud": rows, "idle": []}) == []
+
+
+def test_procurement_finds_laptop_overprice():
+    rows = [{"item description": "Lenovo ThinkPad", "unit price": 94000, "qty": 8}]
+    f = procurement_detector.run({"procurement": rows})
+    assert f and f[0].inrImpact == 212000
+
+
+def test_procurement_ignores_macbook():
+    rows = [{"item description": "MacBook Pro 14", "unit price": 192000, "qty": 5}]
+    assert procurement_detector.run({"procurement": rows}) == []
+
+
+def test_procurement_ignores_low_variance():
+    rows = [{"item description": "Monitor", "unit price": 32400, "qty": 1}]
+    assert procurement_detector.run({"procurement": rows}) == []
+
+
+def test_budget_finds_marketing_overspend():
+    rows = [{"department": "Marketing", "budget": 2460000, "actual": 3620000}]
+    f = budget_detector.run({"budget": rows})
+    assert f and f[0].severity == "critical" and f[0].inrImpact == 1160000
+
+
+def test_budget_ignores_it_underspend():
+    rows = [{"department": "IT", "budget": 3600000, "actual": 3340000}]
+    assert budget_detector.run({"budget": rows}) == []
+
+
+def test_payroll_finds_ghost_employee():
+    rows = [{"emp id": "EMP-9999", "name": "[DELETED USER]", "tds": 0, "gross": 45000, "type": "Contractor"}]
+    f = payroll_detector.run({"payroll": rows})
+    assert f and f[0].severity == "critical"
+
+
+def test_payroll_finds_dual_payment():
+    rows = [
+        {"name": "Priya Nair", "type": "Employee", "gross": 98000, "department": "Finance", "month": "2024-04"},
+        {"name": "Priya N. Consulting", "type": "Contractor", "gross": 98000, "department": "Finance", "month": "2024-04"},
+    ]
+    f = payroll_detector.run({"payroll": rows})
+    assert any(x.detectorId == "F_G2" for x in f)
+
+
+def test_interco_finds_circular_flow():
+    rows = [
+        {"from entity": "A", "to entity": "B", "amount": 100000, "date": "2024-04-01"},
+        {"from entity": "B", "to entity": "A", "amount": 110000, "date": "2024-04-20"},
+    ]
+    f = interco_detector.run({"interco": rows})
+    assert f and f[0].severity == "critical"
+
+
+def test_interco_ignores_gst_reverse_charge():
+    rows = [
+        {"from entity": "A", "to entity": "B", "amount": 100000, "date": "2024-04-01", "purpose": "gst reverse charge"},
+        {"from entity": "B", "to entity": "A", "amount": 100000, "date": "2024-04-20", "purpose": "gst reverse charge"},
+    ]
+    assert interco_detector.run({"interco": rows}) == []
