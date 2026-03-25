@@ -22,6 +22,8 @@ HEADER_RULES = {
 
 DATE_FORMATS = ["%d-%b-%y", "%d-%m-%Y", "%d/%m/%Y", "%b-%y", "%b-%Y", "%d %b %Y"]
 
+TEXT_STOP_MARKERS = ("anomaly flag", "savings summary", "note:")
+
 
 def clean_header(value: Any, idx: int) -> str:
     text = str(value).strip().lower().replace("\n", " ") if value is not None else ""
@@ -124,6 +126,13 @@ def parse_pdf(content: bytes, file_name: str) -> dict[str, Any]:
                 category = classify_headers(headers)
                 data[category].extend(rows)
 
+    if tables_found == 0 and raw_text_parts:
+        fallback_tables = _parse_text_tables(raw_text_parts)
+        for category, rows in fallback_tables.items():
+            data[category].extend(rows)
+            if rows:
+                tables_found += 1
+
     row_counts = {k: len(v) for k, v in data.items()}
     return {
         "success": True,
@@ -135,3 +144,41 @@ def parse_pdf(content: bytes, file_name: str) -> dict[str, Any]:
         "pageCount": len(raw_text_parts),
         "tablesFound": tables_found,
     }
+
+
+def _parse_text_tables(raw_text_parts: list[str]) -> dict[str, list[dict[str, Any]]]:
+    out = {k: [] for k in CATEGORIES}
+    for text in raw_text_parts:
+        lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+        active_headers: list[str] | None = None
+        active_category = "unclassified"
+        for line in lines:
+            lower = line.lower()
+            if any(marker in lower for marker in TEXT_STOP_MARKERS):
+                active_headers = None
+                continue
+
+            maybe_headers = [clean_header(x, i) for i, x in enumerate(re.split(r"\s{2,}", line)) if x.strip()]
+            if len(maybe_headers) >= 3:
+                detected = classify_headers(maybe_headers)
+                if detected != "unclassified":
+                    active_headers = maybe_headers
+                    active_category = detected
+                    continue
+
+            if not active_headers:
+                continue
+
+            cells = [x.strip() for x in re.split(r"\s{2,}", line) if x.strip()]
+            if len(cells) < max(3, len(active_headers) - 2):
+                continue
+            if len(cells) > len(active_headers):
+                cells = cells[: len(active_headers) - 1] + [" ".join(cells[len(active_headers) - 1 :])]
+
+            row: dict[str, Any] = {}
+            for i, key in enumerate(active_headers):
+                val = cells[i] if i < len(cells) else ""
+                row[key] = coerce_cell(val, key)
+            if any(v not in ("", None) for v in row.values()):
+                out[active_category].append(row)
+    return out

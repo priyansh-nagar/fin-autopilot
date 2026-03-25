@@ -1,5 +1,6 @@
 from backend.detectors import budget_detector, cloud_detector, interco_detector, payroll_detector, procurement_detector, vendor_detector
 from backend.parsers.csv_parser import parse_csv
+from backend.parsers.pdf_parser import _parse_text_tables
 
 
 def test_vendor_finds_wipro_duplicates():
@@ -129,4 +130,16 @@ def test_csv_parser_normalizes_header_case_for_detectors():
     ).encode()
     parsed = parse_csv(csv_bytes, "vendors.csv")
     findings = vendor_detector.run(parsed["data"])
+    assert findings and findings[0].inrImpact == 560000
+
+
+def test_pdf_text_fallback_parses_vendor_rows():
+    raw_parts = ["""
+    Txn ID  Date  Credit Party  GSTIN  PAN  Amount (INR)  Inv. Date
+    TXN-001  03-Apr-24  Wipro Technologies Pvt Ltd  29AAACW0603R1ZX  AAACW0603R  2,80,000  05-Apr-2024
+    TXN-002  05-Apr-24  WIPRO TECH LTD  29AAACW0603R1ZX  AAACW0603R  2,80,000  02-May-2024
+    ANOMALY FLAG: sample
+    """]
+    parsed = _parse_text_tables(raw_parts)
+    findings = vendor_detector.run(parsed)
     assert findings and findings[0].inrImpact == 560000
