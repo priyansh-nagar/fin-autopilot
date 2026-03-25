@@ -12,7 +12,6 @@ import Procurement from './pages/Procurement';
 import Budgets from './pages/Budgets';
 
 import { useStore } from './store/useStore';
-import { uploadAndParse, runDetection } from './lib/api';
 import { runAllDetectors } from './utils/detectors';
 
 type Tab = 'overview' | 'cloud' | 'procurement' | 'budgets';
@@ -88,31 +87,22 @@ export default function App() {
     if (!file) return;
 
     try {
-      setLoading(true, 'Parsing your file...');
-
-      let parsed: any;
-      try {
-        parsed = await uploadAndParse(file);
-      } catch (apiParseError: any) {
-        if (!file.name.toLowerCase().endsWith('.csv')) throw apiParseError;
-        parsed = await parseCsvLocally(file);
+      if (!file.name.toLowerCase().endsWith('.csv')) {
+        throw new Error('Only CSV is supported in local mode. Use chat API only for AI queries.');
       }
 
+      setLoading(true, 'Parsing CSV locally...');
+      const parsed: any = await parseCsvLocally(file);
       setParsed(parsed);
 
-      setLoading(true, 'Running anomaly detection...');
-      try {
-        const detected = await runDetection(parsed.data);
-        setFindings(detected.findings || []);
-      } catch (apiDetectError) {
-        const fallback = runAllDetectors({
-          vendorRows: parsed.data.vendor || [],
-          cloudRows: parsed.data.cloud || [],
-          procRows: parsed.data.procurement || [],
-          budgetRows: parsed.data.budget || [],
-        });
-        setFindings(normalizeLegacyFindings(fallback));
-      }
+      setLoading(true, 'Running local anomaly detection...');
+      const fallback = runAllDetectors({
+        vendorRows: parsed.data.vendor || [],
+        cloudRows: parsed.data.cloud || [],
+        procRows: parsed.data.procurement || [],
+        budgetRows: parsed.data.budget || [],
+      });
+      setFindings(normalizeLegacyFindings(fallback));
 
       if (parsed.data.cloud?.length) setActiveTab('cloud');
       else if (parsed.data.procurement?.length) setActiveTab('procurement');
@@ -120,7 +110,7 @@ export default function App() {
       else setActiveTab('overview');
     } catch (err: any) {
       console.error(err);
-      const message = err?.message?.trim() || 'Unable to upload. Check VITE_API_URL, backend health, and CORS settings.';
+      const message = err?.message?.trim() || 'Unable to upload. Use CSV for local analysis.';
       alert(`Upload failed: ${message}`);
     } finally {
       setLoading(false, '');
