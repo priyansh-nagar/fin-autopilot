@@ -1,8 +1,15 @@
 const ENV_BASE = import.meta.env.VITE_API_URL?.trim();
-const BASE = ENV_BASE || (import.meta.env.DEV ? 'http://localhost:8000' : window.location.origin);
+
+function getBaseUrl() {
+  if (ENV_BASE) return ENV_BASE.replace(/\/$/, '');
+  if (import.meta.env.DEV) return 'http://localhost:8000';
+  throw new Error(
+    'VITE_API_URL is not configured for production. Set it to your backend URL (e.g. https://your-backend-domain).'
+  );
+}
 
 function apiUrl(path: string) {
-  return `${BASE}${path}`;
+  return `${getBaseUrl()}${path}`;
 }
 
 async function fetchJson(url: string, options: RequestInit) {
