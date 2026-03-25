@@ -4,6 +4,7 @@ from fastapi import APIRouter
 
 from backend.detectors import budget_detector, cloud_detector, interco_detector, payroll_detector, procurement_detector, vendor_detector
 from backend.models import DetectResponse, Finding
+from backend.parsers.pdf_parser import classify_headers
 
 router = APIRouter(prefix="/api", tags=["detect"])
 
@@ -15,8 +16,27 @@ def _assign_ids(findings: list[Finding]) -> list[Finding]:
     return sorted_findings
 
 
+def _normalize_input(payload: dict) -> dict:
+    parsed = payload.get("data") if isinstance(payload.get("data"), dict) else payload
+    categories = ["vendor", "cloud", "idle", "procurement", "payroll", "budget", "interco", "unclassified"]
+    data = {k: list(parsed.get(k, [])) for k in categories}
+
+    migrated: list[dict] = []
+    for row in data.get("unclassified", []):
+        if not isinstance(row, dict):
+            continue
+        detected = classify_headers([str(k).lower() for k in row.keys()])
+        if detected != "unclassified":
+            data[detected].append(row)
+            migrated.append(row)
+    if migrated:
+        data["unclassified"] = [r for r in data["unclassified"] if r not in migrated]
+    return data
+
+
 @router.post("/detect", response_model=DetectResponse)
 async def detect(parsed_data: dict):
+    parsed_data = _normalize_input(parsed_data)
     all_findings: list[Finding] = []
     all_findings += vendor_detector.run(parsed_data)
     all_findings += cloud_detector.run(parsed_data)

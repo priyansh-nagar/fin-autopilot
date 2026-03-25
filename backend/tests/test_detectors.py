@@ -1,6 +1,7 @@
 from backend.detectors import budget_detector, cloud_detector, interco_detector, payroll_detector, procurement_detector, vendor_detector
 from backend.parsers.csv_parser import parse_csv
 from backend.parsers.pdf_parser import _parse_text_tables
+from backend.routers.detect import _normalize_input
 
 
 def test_vendor_finds_wipro_duplicates():
@@ -142,4 +143,17 @@ def test_pdf_text_fallback_parses_vendor_rows():
     """]
     parsed = _parse_text_tables(raw_parts)
     findings = vendor_detector.run(parsed)
+    assert findings and findings[0].inrImpact == 560000
+
+
+def test_detect_normalizes_unclassified_rows():
+    payload = {
+        "unclassified": [
+            {"vendor name": "Wipro Ltd", "pan": "ABCDE1234F", "amount (inr)": 280000},
+            {"vendor name": "WIPRO TECH LTD", "pan": "ABCDE1234F", "amount (inr)": 280000},
+        ]
+    }
+    normalized = _normalize_input(payload)
+    findings = vendor_detector.run(normalized)
+    assert len(normalized["vendor"]) == 2
     assert findings and findings[0].inrImpact == 560000
