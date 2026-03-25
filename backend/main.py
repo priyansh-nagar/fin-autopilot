@@ -58,9 +58,14 @@ load_dotenv()
 
 app = FastAPI(title="Fin-Autopilot API")
 
+ALLOWED_ORIGINS = [o.strip() for o in os.getenv("CORS_ORIGINS", "").split(",") if o.strip()]
+if not ALLOWED_ORIGINS:
+    ALLOWED_ORIGINS = ["http://localhost:5000", "http://localhost:5173", "http://localhost:3000"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=r"https://.*\.replit\.dev",
     allow_methods=["*"],
     allow_headers=["*"],
 )
