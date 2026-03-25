@@ -1,0 +1,127 @@
+Build a complete backend system in Python that can accurately parse, clean, and analyze financial PDF datasets for cost intelligence without using any external APIs or LLMs.
+
+The system must NOT return default values like 0 unless the dataset is truly empty. It must correctly extract and process structured financial data from multi-page PDFs.
+
+1. PDF PARSING (CRITICAL FIX)
+Use pdfplumber as primary parser for table extraction.
+Use PyMuPDF (fitz) as fallback if tables are not detected.
+Extract ALL tables from ALL pages (not just first page).
+Convert tables into structured pandas DataFrames.
+If no tables detected → extract raw text and attempt regex-based parsing.
+2. DATA CLEANING & NORMALIZATION
+Remove currency symbols (₹, commas, spaces).
+Convert all numeric fields to float/int.
+Normalize vendor names:
+lowercase
+remove punctuation
+strip spaces
+Example:
+"WIPRO TECH LTD", "Wipro Tech.", "Wipro Technologies" → SAME entity
+3. TABLE TYPE DETECTION
+
+Auto-detect table type:
+
+Transaction ledger
+Vendor invoice data
+Budget vs actuals
+Cloud billing
+
+Use column names like:
+
+“Amount”, “Vendor”, “Budget”, “Actual”, “Month” to classify
+4. CORE ANALYSIS ENGINE
+A. Duplicate Vendor Detection
+Group by normalized vendor names
+Detect same vendor with multiple name variations
+Flag repeated payments with same amount or pattern
+B. Transaction Anomalies
+Same amount + similar vendor + close dates → duplicate payment
+Flag high-frequency repeated transactions
+C. Budget Analysis
+variance = actual - budget
+variance % = (actual - budget) / budget * 100
+Flag if variance > 20%
+D. Procurement Analysis
+If benchmark column exists:
+Flag if price > 15% above benchmark
+E. Cloud Cost Analysis
+Month-over-month increase > 30% → anomaly
+Detect idle resources (if usage = 0 or very low)
+5. FALSE POSITIVE FILTER (VERY IMPORTANT)
+
+System must intelligently ignore:
+
+Recurring monthly payments (like subscriptions, internet bills)
+Seasonal spikes (e.g., festive months)
+Internal transfers (keywords: “internal”, “recharge”)
+Variance < 15% in procurement
+6. OUTPUT FORMAT (STRICT)
+
+Return JSON:
+
+{
+"total_spend": number,
+"anomalies": [
+{
+"type": "duplicate_vendor / spike / overpricing / budget",
+"description": "...",
+"impact": number,
+"confidence": 0-1
+}
+],
+"duplicate_vendors": [...],
+"overpricing_flags": [...],
+"budget_issues": [...],
+"recommendations": [...]
+}
+
+7. DEBUGGING SAFETY (FIX YOUR 0 ISSUE)
+Print extracted tables BEFORE processing
+If DataFrame is empty → print raw text
+If numeric parsing fails → log problematic rows
+NEVER return 0 silently
+8. ARCHITECTURE (IMPORTANT FOR HACKATHON)
+
+Pipeline:
+
+PDF Upload → Table Extraction → Cleaning → Classification → Analysis → Output JSON
+
+9. IMPACT CALCULATION (WINNING EDGE)
+Calculate estimated savings:
+duplicate payments
+overpricing difference
+idle resources cost
+Include total savings in output
+10. PERFORMANCE
+Must run fully offline
+No API calls
+Handle large PDFs (10+ pages)
+11. EXTRA (HIGHLY IMPORTANT FOR TRACK 3)
+
+Add:
+
+Confidence score per anomaly
+Rule-based reasoning (why flagged)
+Clear distinction:
+REAL anomaly
+FALSE positive
+12. FILE STRUCTURE
+
+Create:
+
+parser.py
+cleaner.py
+analyzer.py
+main.py
+13. FINAL REQUIREMENT
+
+System must:
+
+Detect anomalies
+Diagnose root cause
+Recommend actions
+Quantify financial impact
+
+If parsing fails → system must still output debug logs, NOT empty results.
+
+🚀 END
