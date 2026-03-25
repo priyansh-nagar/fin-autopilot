@@ -1,8 +1,11 @@
 const ENV_BASE = import.meta.env.VITE_API_URL?.trim();
 
 function getBaseUrl() {
-  if (ENV_BASE) return ENV_BASE.replace(/\/$/, '');
-  if (import.meta.env.DEV) return 'http://localhost:8000';
+  const normalized = ENV_BASE?.replace(/\/$/, '');
+  if (normalized) {
+    return normalized.endsWith('/api') ? normalized : `${normalized}/api`;
+  }
+  if (import.meta.env.DEV) return 'http://localhost:8000/api';
   // Production fallback: use same-domain Vercel Python function at /api
   return '/api';
 }
