@@ -13,7 +13,7 @@ export default function Overview() {
 
   return (
     <div className="space-y-8">
-      <SavingsCard totalRecovered={0} categoryBreakdown={categoryBreakdown} onExportPDF={generatePDFReport} />
+      <SavingsCard totalRecovered={totalWaste} categoryBreakdown={categoryBreakdown} onExportPDF={generatePDFReport} />
       <div className="grid grid-cols-3 gap-4">
         <div className="bg-finCard border border-zinc-800 p-4 rounded-xl">ITEMS SCANNED: <b>{itemsScanned.toLocaleString('en-IN')}</b></div>
         <div className="bg-finCard border border-zinc-800 p-4 rounded-xl">TOTAL WASTE: <b>{new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(totalWaste)}</b></div>

@@ -34,10 +34,24 @@ const detectCategory = (headers: string[]) => {
   return scored[0].score > 0 ? scored[0].category : 'unclassified';
 };
 
+const coerceCell = (value: any) => {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'number') return value;
+  const text = String(value).trim();
+  if (!text) return '';
+
+  const numeric = text.replace(/[₹,\s]/g, '');
+  if (/^-?\d+(\.\d+)?$/.test(numeric)) return Number(numeric);
+
+  return text;
+};
+
 const parseCsvLocally = async (file: File) => {
   const text = await file.text();
   const parsed = Papa.parse<Record<string, any>>(text, { header: true, skipEmptyLines: true });
-  const rows = parsed.data || [];
+  const rows = (parsed.data || []).map((row) =>
+    Object.fromEntries(Object.entries(row).map(([key, value]) => [key, coerceCell(value)]))
+  );
   const headers = parsed.meta.fields || [];
   const category = detectCategory(headers);
 
