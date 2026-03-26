@@ -4,7 +4,7 @@ import { useStore } from '../store/useStore';
 import { generatePDFReport } from '../utils/pdfGenerator';
 
 export default function Overview() {
-  const { findings, totalWaste, itemsScanned } = useStore();
+  const { findings, totalWaste, itemsScanned, resolveFinding } = useStore();
 
   const categoryBreakdown = findings.reduce((acc: any, f) => {
     acc[f.category] = (acc[f.category] || 0) + f.inrImpact;
@@ -19,7 +19,7 @@ export default function Overview() {
         <div className="bg-finCard border border-zinc-800 p-4 rounded-xl">TOTAL WASTE: <b>{new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(totalWaste)}</b></div>
         <div className="bg-finCard border border-zinc-800 p-4 rounded-xl">ACTIVE ANOMALIES: <b>{findings.length}</b></div>
       </div>
-      <FindingsFeed findings={findings} onResolve={() => {}} />
+      <FindingsFeed findings={findings} onResolve={resolveFinding} />
     </div>
   );
 }

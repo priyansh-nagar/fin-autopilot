@@ -38,6 +38,7 @@ interface AppState {
   loadingMessage: string;
   setParsed: (data: ParseResult) => void;
   setFindings: (f: Finding[]) => void;
+  resolveFinding: (id: string) => void;
   setLoading: (isLoading: boolean, message?: string) => void;
   reset: () => void;
 }
@@ -58,6 +59,18 @@ export const useAppStore = create<AppState>((set) => ({
     set({
       findings: f,
       totalWaste: f.reduce((sum, item) => sum + (Number(item.inrImpact) || 0), 0),
+    }),
+  resolveFinding: (id) =>
+    set((state) => {
+      const updated = state.findings.map((f) =>
+        f.id === id ? { ...f, resolved: true } : f
+      );
+      return {
+        findings: updated,
+        totalWaste: updated
+          .filter((f) => !f.resolved)
+          .reduce((sum, f) => sum + (Number(f.inrImpact) || 0), 0),
+      };
     }),
   setLoading: (isLoading, message = '') =>
     set({
