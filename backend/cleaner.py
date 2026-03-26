@@ -138,14 +138,14 @@ _GENERIC_COL_MAP = [
     # gstin / pan
     (["gstin"],                                                             "gstin"),
     (["pan"],                                                               "pan"),
-    # cloud
-    (["ec2 (inr", "ec2(inr", "ec2_inr"],                                   "ec2"),
-    (["s3 (inr", "s3(inr", "s3_inr"],                                      "s3"),
-    (["rds (inr", "rds(inr", "rds_inr"],                                   "rds"),
-    (["lambda (inr", "lambda(inr", "lambda_inr"],                          "lambda"),
-    (["cloudfront (inr", "cloudfront_inr"],                                "cloudfront"),
-    (["network (inr", "network_inr"],                                      "network"),
-    (["total (inr", "total(inr", "total_inr", "total spend"],              "total"),
+    # cloud — handle pdfplumber-truncated column names like "Lambda (IN" or "R)CloudFront"
+    (["ec2"],                                                               "ec2"),
+    (["s3 (",  "s3(", "s3_inr", " s3 "],                                  "s3"),
+    (["rds"],                                                               "rds"),
+    (["lambda"],                                                            "lambda"),
+    (["cloudfront", "r)cloud"],                                            "cloudfront"),
+    (["network"],                                                           "network"),
+    (["total (inr", "total(inr", "total_inr", "total spend", "r)total"],   "total"),
     (["mom change", "mom %", "vs baseline", "mom_change"],                 "mom_change"),
     # budget
     (["q1 budget", "q1_budget", "q1 bgt", "q1_bgt"],                      "q1_budget"),
@@ -308,14 +308,6 @@ def reshape_cloud(df: pd.DataFrame) -> pd.DataFrame:
                 "month":      month,
                 "service":    svc.upper(),
                 "cost":       cost,
-                "mom_change": mom,
-            })
-        # Also store the total row
-        if "total" in cols:
-            rows.append({
-                "month":      month,
-                "service":    "TOTAL",
-                "cost":       clean_numeric(row.get("total")) or 0.0,
                 "mom_change": mom,
             })
 
