@@ -1,0 +1,45 @@
+ Getting requirements to build wheel: started
+  Getting requirements to build wheel: finished with status 'error'
+  error: subprocess-exited-with-error
+  
+  × Getting requirements to build wheel did not run successfully.
+  │ exit code: 1
+  ╰─> [32 lines of output]
+      Traceback (most recent call last):
+        File "/opt/render/project/src/.venv/lib/python3.14/site-packages/pip/_vendor/pyproject_hooks/_in_process/_in_process.py", line 389, in <module>
+          main()
+          ~~~~^^
+        File "/opt/render/project/src/.venv/lib/python3.14/site-packages/pip/_vendor/pyproject_hooks/_in_process/_in_process.py", line 373, in main
+          json_out["return_val"] = hook(**hook_input["kwargs"])
+                                   ~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+        File "/opt/render/project/src/.venv/lib/python3.14/site-packages/pip/_vendor/pyproject_hooks/_in_process/_in_process.py", line 137, in get_requires_for_build_wheel
+          backend = _build_backend()
+        File "/opt/render/project/src/.venv/lib/python3.14/site-packages/pip/_vendor/pyproject_hooks/_in_process/_in_process.py", line 70, in _build_backend
+          obj = import_module(mod_path)
+        File "/opt/render/project/python/Python-3.14.3/lib/python3.14/importlib/__init__.py", line 88, in import_module
+          return _bootstrap._gcd_import(name[level:], package, level)
+                 ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+        File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+        File "<frozen importlib._bootstrap>", line 1314, in _find_and_load_unlocked
+        File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+        File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+        File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+        File "<frozen importlib._bootstrap>", line 1342, in _find_and_load_unlocked
+        File "<frozen importlib._bootstrap>", line 938, in _load_unlocked
+        File "<frozen importlib._bootstrap_external>", line 759, in exec_module
+        File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+        File "/tmp/pip-build-env-y6xev8hb/overlay/lib/python3.14/site-packages/setuptools/__init__.py", line 16, in <module>
+          import setuptools.version
+        File "/tmp/pip-build-env-y6xev8hb/overlay/lib/python3.14/site-packages/setuptools/version.py", line 1, in <module>
+          import pkg_resources
+        File "/tmp/pip-build-env-y6xev8hb/overlay/lib/python3.14/site-packages/pkg_resources/__init__.py", line 2172, in <module>
+          register_finder(pkgutil.ImpImporter, find_on_path)
+                          ^^^^^^^^^^^^^^^^^^^
+      AttributeError: module 'pkgutil' has no attribute 'ImpImporter'. Did you mean: 'zipimporter'?
+      [end of output]
+  
+  note: This error originates from a subprocess, and is likely not a problem with pip.
+ERROR: Failed to build 'numpy' when getting requirements to build wheel
+==> Build failed 😞
+==> Common ways to troubleshoot your deploy: https://render.com/docs/troubleshooting-deploys
