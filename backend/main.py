@@ -4,7 +4,7 @@ Endpoints:
   POST /api/parse    – upload CSV or PDF, returns classified row data
   POST /api/detect   – run anomaly detection on structured data
   POST /api/analyze  – full pipeline: parse → clean → classify → analyze
-  POST /api/chat     – FinBot AI assistant (requires GEMINI_API_KEY)
+  POST /api/chat     – FinBot AI assistant (requires NVIDIA_API_KEY)
   GET  /             – health check
 """
 
@@ -28,9 +28,9 @@ except ImportError:
         return False
 
 try:
-    import google.generativeai as genai
+    from openai import OpenAI as _OpenAI
 except ImportError:
-    genai = None
+    _OpenAI = None
 
 from parser import parse_file
 from cleaner import classify_and_clean, clean_dataframe, normalize_records_for_frontend
@@ -343,16 +343,18 @@ def chat_endpoint(req: ChatRequest):
     if not req.messages:
         raise HTTPException(status_code=400, detail="messages array is required")
 
-    api_key = os.getenv("GEMINI_API_KEY")
+    api_key = os.getenv("OPENROUTER_API_KEY")
     if not api_key:
-        raise HTTPException(status_code=500, detail="GEMINI_API_KEY not configured")
+        raise HTTPException(status_code=500, detail="OPENROUTER_API_KEY not configured")
 
-    if genai is None:
-        raise HTTPException(status_code=500, detail="google-generativeai is not installed")
+    if _OpenAI is None:
+        raise HTTPException(status_code=500, detail="openai package is not installed")
 
     try:
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        client = _OpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=api_key,
+        )
 
         context_payload = json.dumps(req.context, ensure_ascii=False)[:4000]
         system_prompt = (
@@ -366,19 +368,19 @@ def chat_endpoint(req: ChatRequest):
             f"Current data: {context_payload}"
         )
 
-        history = []
-        for msg in req.messages[:-1]:
-            if msg.role in {"user", "assistant", "model"}:
-                history.append({
-                    "role": "model" if msg.role == "assistant" else msg.role,
-                    "parts": [{"text": msg.content}],
-                })
+        messages = [{"role": "system", "content": system_prompt}]
+        for msg in req.messages:
+            role = "assistant" if msg.role == "assistant" else "user"
+            messages.append({"role": role, "content": msg.content})
 
-        chat_session = model.start_chat(history=history)
-        user_prompt = f"{system_prompt}\n\nUser query: {req.messages[-1].content}"
-        response = chat_session.send_message(user_prompt)
+        response = client.chat.completions.create(
+            model="meta-llama/llama-3.3-70b-instruct",
+            messages=messages,
+            max_tokens=1024,
+        )
 
-        return {"success": True, "reply": response.text, "role": "assistant"}
+        reply = response.choices[0].message.content
+        return {"success": True, "reply": reply, "role": "assistant"}
     except Exception as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
