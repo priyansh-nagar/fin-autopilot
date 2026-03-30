@@ -34,10 +34,21 @@ export default function AIChat({ isOpen, onClose, parseResult }: { isOpen: boole
         procurement: parseResult?.data.procurement || [],
         budget: parseResult?.data.budget || [],
       };
-      const result = await askFinBot(payloadMessages, context);
-      setMessages((prev) => [...prev, { role: 'assistant', text: result.reply || 'No response returned.' }]);
+
+      setMessages((prev) => [...prev, { role: 'assistant' as const, text: '' }]);
+      setLoading(false);
+
+      await askFinBot(payloadMessages, context, (partialText) => {
+        setMessages((prev) => [
+          ...prev.slice(0, -1),
+          { role: 'assistant' as const, text: partialText },
+        ]);
+      });
     } catch (e: any) {
-      setMessages((prev) => [...prev, { role: 'assistant', text: `Connection Error: ${e.message}` }]);
+      setMessages((prev) => [
+        ...prev.slice(0, -1),
+        { role: 'assistant' as const, text: `Connection Error: ${e.message}` },
+      ]);
     } finally {
       setLoading(false);
     }
@@ -58,10 +69,20 @@ export default function AIChat({ isOpen, onClose, parseResult }: { isOpen: boole
           {messages.length === 0 && <div className="text-zinc-300">Hi CFO! Ask me about detected anomalies and savings opportunities.</div>}
           {messages.map((m, i) => (
             <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[85%] p-4 rounded-2xl text-[14px] ${m.role === 'user' ? 'bg-violet-600 text-white' : 'bg-finCard text-zinc-300 border border-zinc-800'}`}>{m.text}</div>
+              <div className={`max-w-[85%] p-4 rounded-2xl text-[14px] ${m.role === 'user' ? 'bg-violet-600 text-white' : 'bg-finCard text-zinc-300 border border-zinc-800'}`}>
+                {m.text || <span className="inline-block w-2 h-4 bg-violet-400 animate-pulse rounded-sm" />}
+              </div>
             </div>
           ))}
-          {loading && <div className="text-zinc-500">FinBot is thinking...</div>}
+          {loading && (
+            <div className="flex justify-start">
+              <div className="bg-finCard border border-zinc-800 p-4 rounded-2xl flex space-x-1">
+                <span className="w-2 h-2 bg-violet-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="w-2 h-2 bg-violet-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                <span className="w-2 h-2 bg-violet-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="p-4 border-t border-zinc-800 bg-[#18181b]">

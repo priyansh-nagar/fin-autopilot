@@ -18,12 +18,28 @@ export async function runDetection(data: object) {
   return res.json();
 }
 
-export async function askFinBot(messages: object[], context: object) {
+export async function askFinBot(
+  messages: object[],
+  context: object,
+  onChunk: (text: string) => void
+): Promise<string> {
   const res = await fetch(`${BASE}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ messages, context }),
   });
   if (!res.ok) throw new Error(await res.text());
-  return res.json();
+
+  const reader = res.body!.getReader();
+  const decoder = new TextDecoder();
+  let fullText = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    fullText += decoder.decode(value, { stream: true });
+    onChunk(fullText);
+  }
+
+  return fullText;
 }

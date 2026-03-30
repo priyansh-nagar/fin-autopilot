@@ -19,6 +19,7 @@ from typing import Any
 import pandas as pd
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 try:
@@ -350,39 +351,43 @@ def chat_endpoint(req: ChatRequest):
     if _OpenAI is None:
         raise HTTPException(status_code=500, detail="openai package is not installed")
 
-    try:
-        client = _OpenAI(
-            base_url="https://openrouter.ai/api/v1",
-            api_key=api_key,
-        )
+    context_payload = json.dumps(req.context, ensure_ascii=False)[:2000]
+    system_prompt = (
+        "You are FinBot, an expert finance AI assistant built into Fin-Autopilot, an enterprise cost intelligence platform. "
+        "Your job is to help CFOs and finance teams understand their financial data, detect anomalies, and find cost-saving opportunities. "
+        "You specialise in: cost anomalies, vendor duplicates, procurement overpricing, cloud spend optimisation, "
+        "budget variances, GST/TDS compliance, accounts payable/receivable, P&L analysis, working capital, and CFO reporting. "
+        "Always be helpful and direct. When the user's uploaded data is available, reference specific vendors, departments, "
+        "and INR figures (use lakh/crore notation). End every response with a clear recommended next action. "
+        "If asked something completely unrelated to finance or business, politely redirect to finance topics. "
+        f"Uploaded financial data context: {context_payload}"
+    )
 
-        context_payload = json.dumps(req.context, ensure_ascii=False)[:4000]
-        system_prompt = (
-            "You are FinBot, an expert finance AI assistant built into Fin-Autopilot, an enterprise cost intelligence platform. "
-            "Your job is to help CFOs and finance teams understand their financial data, detect anomalies, and find cost-saving opportunities. "
-            "You specialise in: cost anomalies, vendor duplicates, procurement overpricing, cloud spend optimisation, "
-            "budget variances, GST/TDS compliance, accounts payable/receivable, P&L analysis, working capital, and CFO reporting. "
-            "Always be helpful and direct. When the user's uploaded data is available, reference specific vendors, departments, "
-            "and INR figures (use lakh/crore notation). End every response with a clear recommended next action. "
-            "If asked something completely unrelated to finance or business, politely redirect to finance topics. "
-            f"Uploaded financial data context: {context_payload}"
-        )
+    messages = [{"role": "system", "content": system_prompt}]
+    for msg in req.messages:
+        role = "assistant" if msg.role == "assistant" else "user"
+        messages.append({"role": role, "content": msg.content})
 
-        messages = [{"role": "system", "content": system_prompt}]
-        for msg in req.messages:
-            role = "assistant" if msg.role == "assistant" else "user"
-            messages.append({"role": role, "content": msg.content})
+    def stream_response():
+        try:
+            client = _OpenAI(
+                base_url="https://openrouter.ai/api/v1",
+                api_key=api_key,
+            )
+            stream = client.chat.completions.create(
+                model="meta-llama/llama-3.1-8b-instruct",
+                messages=messages,
+                max_tokens=512,
+                stream=True,
+            )
+            for chunk in stream:
+                delta = chunk.choices[0].delta.content
+                if delta:
+                    yield delta
+        except Exception as exc:
+            yield f"\n[Error: {exc}]"
 
-        response = client.chat.completions.create(
-            model="meta-llama/llama-3.3-70b-instruct",
-            messages=messages,
-            max_tokens=1024,
-        )
-
-        reply = response.choices[0].message.content
-        return {"success": True, "reply": reply, "role": "assistant"}
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return StreamingResponse(stream_response(), media_type="text/plain; charset=utf-8")
 
 
 # ---------------------------------------------------------------------------
